@@ -58,6 +58,7 @@ footer{text-align:center;padding:25px;color:#777;font-size:11px}
   <button data-page="jobs">▤ কাজের তালিকা</button>
   <button data-page="expenses">৳ খরচ</button>
   <button data-page="parts">▣ পার্টস</button>
+  <button data-page="partorders">📦 মালের অর্ডার</button>
   <button data-page="reports">▥ রিপোর্ট</button>
   <button data-page="shopneeds">📝 মালামালের তালিকা</button>
   <button data-page="loans">৳ হাওলাত নেওয়া</button>
@@ -156,6 +157,24 @@ footer{text-align:center;padding:25px;color:#777;font-size:11px}
   </div><div class="actions"><button>পার্টস যোগ করুন</button></div></form></div>
   <div class="card"><h3>স্টক তালিকা</h3><div id="partsTable"></div></div>
 </section>
+<section id="partorders" class="page hidden">
+  <h2>কাস্টমারের মালের অর্ডার</h2>
+  <p class="muted">কাস্টমার কোন ডিভাইসের জন্য কী কী মাল অর্ডার দিয়েছেন এবং প্রতিটির দাম লিখে রাখুন।</p>
+  <div class="card"><form id="partOrderForm">
+    <div class="formgrid">
+      <div class="field"><label>কাস্টমারের নাম *</label><input name="customer" required placeholder="যেমন: Joynul Abedin"></div>
+      <div class="field"><label>তারিখ *</label><input name="date" type="date" id="partOrderDate" required></div>
+      <div class="field"><label>ডিভাইসের নাম *</label><input name="device" required placeholder="যেমন: Infinix Hot 30"></div>
+    </div>
+    <h3>অর্ডার করা মালামাল</h3><div id="partOrderItems"></div>
+    <div class="actions"><button type="button" class="secondary" onclick="addPartOrderRow()">＋ আরও মাল যোগ করুন</button></div>
+    <div class="field"><label>মোট অর্ডার মূল্য</label><input id="partOrderTotal" readonly value="৳0"></div>
+    <div class="field"><label>অতিরিক্ত নোট</label><textarea name="note" placeholder="প্রয়োজনে লিখুন"></textarea></div>
+    <div class="actions"><button type="submit">অর্ডার সংরক্ষণ করুন</button><button type="reset" class="secondary">ফর্ম পরিষ্কার</button></div>
+  </form></div>
+  <div class="card"><h3>সংরক্ষিত মালের অর্ডার</h3><div id="partOrdersTable"></div></div>
+</section>
+
 
 <section id="reports" class="page hidden">
   <h2>রিপোর্ট</h2><div class="grid" id="reportStats"></div>
@@ -187,7 +206,7 @@ const firebaseConfig = {
  measurementId: "G-PJ9FBPVGHN"
 };
 const app = initializeApp(firebaseConfig), auth = getAuth(app), db = getFirestore(app);
-const emptyData = () => ({jobs:[],expenses:[],parts:[],quickJobs:[],loans:[],shopNeeds:[]});
+const emptyData = () => ({jobs:[],expenses:[],parts:[],quickJobs:[],loans:[],shopNeeds:[],partOrders:[]});
 window.data = emptyData(); let user = null, cloudReady = false, saveTimer;
 const money = n => "৳" + (Number(n)||0).toLocaleString("en-BD");
 const today = () => {
@@ -209,7 +228,7 @@ window.logoutGoogle=async()=>{try{await signOut(auth)}catch(e){alert(e.message)}
 onAuthStateChanged(auth,async u=>{
  user=u;document.getElementById("loginBtn").classList.toggle("hidden",!!u);document.getElementById("logoutBtn").classList.toggle("hidden",!u);
  document.getElementById("authStatus").textContent=u?("Login: "+u.email):"Cloud backup: লগইন করা হয়নি";
- if(u){try{const snap=await getDoc(doc(db,"users",u.uid,"appData","main"));if(snap.exists()&&snap.data().data){const cloud=snap.data().data;const hasLocal=window.data.jobs.length||window.data.expenses.length||window.data.parts.length||(window.data.quickJobs||[]).length||(window.data.loans||[]).length||(window.data.shopNeeds||[]).length;if(!hasLocal){window.data={...emptyData(),...cloud};localStorage.setItem("jrtelecom_data",JSON.stringify(window.data))}else if(!cloud.jobs?.length&&!cloud.expenses?.length&&!cloud.parts?.length&&!(cloud.quickJobs||[]).length&&!(cloud.loans||[]).length&&!(cloud.shopNeeds||[]).length){await syncCloud(true)}else{window.data={...emptyData(),...cloud};localStorage.setItem("jrtelecom_data",JSON.stringify(window.data))}}else{await syncCloud(true)}cloudReady=true;document.getElementById("cloudInfo").textContent="Gmail সংযুক্ত। Cloud Backup প্রস্তুত।";renderAll()}catch(e){document.getElementById("cloudInfo").textContent="Cloud data পড়া যায়নি: "+e.message}}
+ if(u){try{const snap=await getDoc(doc(db,"users",u.uid,"appData","main"));if(snap.exists()&&snap.data().data){const cloud=snap.data().data;const hasLocal=window.data.jobs.length||window.data.expenses.length||window.data.parts.length||(window.data.quickJobs||[]).length||(window.data.loans||[]).length||(window.data.shopNeeds||[]).length||(window.data.partOrders||[]).length;if(!hasLocal){window.data={...emptyData(),...cloud};localStorage.setItem("jrtelecom_data",JSON.stringify(window.data))}else if(!cloud.jobs?.length&&!cloud.expenses?.length&&!cloud.parts?.length&&!(cloud.quickJobs||[]).length&&!(cloud.loans||[]).length&&!(cloud.shopNeeds||[]).length&&!(cloud.partOrders||[]).length){await syncCloud(true)}else{window.data={...emptyData(),...cloud};localStorage.setItem("jrtelecom_data",JSON.stringify(window.data))}}else{await syncCloud(true)}cloudReady=true;document.getElementById("cloudInfo").textContent="Gmail সংযুক্ত। Cloud Backup প্রস্তুত।";renderAll()}catch(e){document.getElementById("cloudInfo").textContent="Cloud data পড়া যায়নি: "+e.message}}
 });
 localLoad();
 </script>
@@ -218,6 +237,7 @@ window.data = window.data || {jobs:[],expenses:[],parts:[],quickJobs:[]};
 data.quickJobs = Array.isArray(data.quickJobs) ? data.quickJobs : [];
 data.loans = Array.isArray(data.loans) ? data.loans : [];
 data.shopNeeds = Array.isArray(data.shopNeeds) ? data.shopNeeds : [];
+data.partOrders = Array.isArray(data.partOrders) ? data.partOrders : [];
 const $=id=>document.getElementById(id);
 const today=()=>{
  const p=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Dhaka",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
@@ -236,15 +256,20 @@ function addPart(e){e.preventDefault();const v=Object.fromEntries(new FormData(e
 function addLoan(e){e.preventDefault();const v=Object.fromEntries(new FormData(e.target));data.loans=data.loans||[];data.loans.unshift({id:uid(),person:v.person,amount:+v.amount||0,date:v.date||today(),note:v.note||""});save();e.target.reset();$("loanDate").value=today();alert("হাওলাতের তথ্য সংরক্ষণ হয়েছে।")}
 function addNeed(e){e.preventDefault();const v=Object.fromEntries(new FormData(e.target));data.shopNeeds=data.shopNeeds||[];data.shopNeeds.unshift({id:uid(),item:v.item,qty:v.qty||"",note:v.note||"",done:false,date:today()});save();e.target.reset();alert("মালামালের তালিকায় যোগ হয়েছে।")}
 function toggleNeed(id){const x=(data.shopNeeds||[]).find(n=>n.id===id);if(x){x.done=!x.done;save()}}
+
+function addPartOrderRow(){const wrap=$("partOrderItems"),row=document.createElement("div");row.className="formgrid part-order-row";row.style.cssText="align-items:end;margin:8px 0;padding:10px;border:1px solid var(--border);border-radius:10px";row.innerHTML=`<div class="field"><label>মালের নাম</label><input class="po-item" required placeholder="যেমন: Display"></div><div class="field"><label>দাম (৳)</label><input class="po-amount" type="number" min="0" step="0.01" required placeholder="যেমন: 1500"></div><div class="field"><button type="button" class="danger" onclick="this.closest('.part-order-row').remove();calcPartOrderTotal()">এই মাল বাদ দিন</button></div>`;wrap.appendChild(row);row.querySelectorAll("input").forEach(el=>el.addEventListener("input",calcPartOrderTotal));calcPartOrderTotal()}
+function calcPartOrderTotal(){const total=[...document.querySelectorAll("#partOrderItems .po-amount")].reduce((a,x)=>a+(Number(x.value)||0),0);$("partOrderTotal").value=money(total);return total}
+function addPartOrder(e){e.preventDefault();const form=e.target,items=[...document.querySelectorAll("#partOrderItems .part-order-row")].map(r=>({item:r.querySelector(".po-item").value.trim(),amount:Number(r.querySelector(".po-amount").value)||0})).filter(x=>x.item);if(!items.length){alert("অন্তত একটি মালামালের নাম ও দাম লিখুন।");return}const v=Object.fromEntries(new FormData(form));data.partOrders=data.partOrders||[];data.partOrders.unshift({id:uid(),customer:v.customer,device:v.device,date:v.date||today(),items,total:items.reduce((a,x)=>a+x.amount,0),note:v.note||""});save();form.reset();$("partOrderItems").innerHTML="";addPartOrderRow();$("partOrderDate").value=today();alert("মালের অর্ডার সংরক্ষণ হয়েছে।")}
+function renderPartOrders(){const rows=data.partOrders||[];$("partOrdersTable").innerHTML=rows.length?`<div class="tablewrap"><table><thead><tr><th>তারিখ / কাস্টমার</th><th>ডিভাইস</th><th>অর্ডার করা মাল ও দাম</th><th>মোট</th><th>নোট</th><th>কাজ</th></tr></thead><tbody>${rows.map(o=>`<tr><td>${esc(o.date)}<br><b>${esc(o.customer)}</b></td><td>${esc(o.device)}</td><td>${(o.items||[]).map(x=>`${esc(x.item)} — ${money(x.amount)}`).join("<br>")}</td><td><b>${money(o.total)}</b></td><td>${esc(o.note||"")}</td><td><button class="danger" onclick="del('partOrders','${o.id}')">মুছুন</button></td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">এখনো কোনো মালের অর্ডার সংরক্ষণ করা হয়নি।</div>'}
 function addQuick(e){e.preventDefault();const v=Object.fromEntries(new FormData(e.target));data.quickJobs=data.quickJobs||[];data.quickJobs.unshift({id:uid(),work:v.work,received:+v.received||0,profit:+v.profit||0,date:v.date||today()});save();e.target.reset();$("quickDate").value=today();alert("দ্রুত কাজের হিসাব সংরক্ষণ হয়েছে।")}
-$("jobForm").addEventListener("submit",addJob);$("needForm").addEventListener("submit",addNeed);$("loanForm").addEventListener("submit",addLoan);$("quickForm").addEventListener("submit",addQuick);$("expenseForm").addEventListener("submit",addExpense);$("partForm").addEventListener("submit",addPart);
+$("jobForm").addEventListener("submit",addJob);$("partOrderForm").addEventListener("submit",addPartOrder);$("needForm").addEventListener("submit",addNeed);$("loanForm").addEventListener("submit",addLoan);$("quickForm").addEventListener("submit",addQuick);$("expenseForm").addEventListener("submit",addExpense);$("partForm").addEventListener("submit",addPart);
 function del(type,id){if(!confirm("এই তথ্যটি মুছে ফেলবেন?"))return;data[type]=data[type].filter(x=>x.id!==id);save()}
 function setStatus(id,status){const j=data.jobs.find(x=>x.id===id);if(j){j.status=status;save()}}
 function payJob(id){const j=data.jobs.find(x=>x.id===id);if(!j)return;const n=Number(prompt("আর কত টাকা জমা নিলেন?",j.due||0));if(!Number.isFinite(n)||n<=0)return;j.paid+=n;j.due=Math.max(0,j.bill-j.paid);save()}
 function jobRows(rows){if(!rows.length)return '<div class="empty">এখনো কোনো কাজ যোগ হয়নি।</div>';return `<div class="tablewrap"><table><thead><tr><th>কাস্টমার / ডিভাইস</th><th>বিল</th><th>জমা</th><th>বাকি</th><th>অবস্থা</th><th class="no-print">কাজ</th></tr></thead><tbody>${rows.map(j=>`<tr><td><b>${esc(j.customer)}</b><br>${esc(j.phone)}<br><span class="muted">${esc(j.device)} · ${esc(j.problem)}</span><br><span class="muted">${esc(j.date)}</span></td><td>${money(j.bill)}</td><td>${money(j.paid)}</td><td class="${j.due?'negative':'positive'}">${money(j.due)}</td><td><select onchange="setStatus('${j.id}',this.value)"><option ${j.status==="কাজ চলছে"?"selected":""}>কাজ চলছে</option><option ${j.status==="সম্পন্ন"?"selected":""}>সম্পন্ন</option><option ${j.status==="ডেলিভারি হয়েছে"?"selected":""}>ডেলিভারি হয়েছে</option></select></td><td class="no-print"><button class="secondary" onclick="payJob('${j.id}')">জমা</button> <button class="secondary" onclick="receipt('${j.id}')">রসিদ</button> <button class="danger" onclick="del('jobs','${j.id}')">মুছুন</button></td></tr>`).join("")}</tbody></table></div>`}
 function renderJobs(){const q=($("jobSearch")?.value||"").toLowerCase(),s=$("statusFilter")?.value||"";const rows=data.jobs.filter(j=>(!s||j.status===s)&&[j.customer,j.phone,j.device,j.problem].join(" ").toLowerCase().includes(q));$("jobsTable").innerHTML=jobRows(rows)}
 window.renderJobs=renderJobs;window.setStatus=setStatus;window.payJob=payJob;window.del=del;
-function renderAll(){if(typeof data==="undefined")return;data.quickJobs=Array.isArray(data.quickJobs)?data.quickJobs:[];const t=today(),month=t.slice(0,7),todayJobs=data.jobs.filter(j=>j.date===t),monthJobs=data.jobs.filter(j=>(j.date||"").startsWith(month)),todayQuick=data.quickJobs.filter(x=>x.date===t),monthQuick=data.quickJobs.filter(x=>(x.date||"").startsWith(month)),todayExp=data.expenses.filter(x=>x.date===t).reduce((a,x)=>a+x.amount,0),monthExp=data.expenses.filter(x=>(x.date||"").startsWith(month)).reduce((a,x)=>a+x.amount,0);const bill=monthJobs.reduce((a,j)=>a+j.bill,0)+monthQuick.reduce((a,x)=>a+x.received,0),quickMonthProfit=monthQuick.reduce((a,x)=>a+x.profit,0),quickTodayProfit=todayQuick.reduce((a,x)=>a+x.profit,0),quickTodayReceived=todayQuick.reduce((a,x)=>a+x.received,0),profit=monthJobs.reduce((a,j)=>a+(j.bill-j.partsCost-j.fee*0),0)+quickMonthProfit-monthExp;
+function renderAll(){data.partOrders=Array.isArray(data.partOrders)?data.partOrders:[];renderPartOrders();if(typeof data==="undefined")return;data.quickJobs=Array.isArray(data.quickJobs)?data.quickJobs:[];const t=today(),month=t.slice(0,7),todayJobs=data.jobs.filter(j=>j.date===t),monthJobs=data.jobs.filter(j=>(j.date||"").startsWith(month)),todayQuick=data.quickJobs.filter(x=>x.date===t),monthQuick=data.quickJobs.filter(x=>(x.date||"").startsWith(month)),todayExp=data.expenses.filter(x=>x.date===t).reduce((a,x)=>a+x.amount,0),monthExp=data.expenses.filter(x=>(x.date||"").startsWith(month)).reduce((a,x)=>a+x.amount,0);const bill=monthJobs.reduce((a,j)=>a+j.bill,0)+monthQuick.reduce((a,x)=>a+x.received,0),quickMonthProfit=monthQuick.reduce((a,x)=>a+x.profit,0),quickTodayProfit=todayQuick.reduce((a,x)=>a+x.profit,0),quickTodayReceived=todayQuick.reduce((a,x)=>a+x.received,0),profit=monthJobs.reduce((a,j)=>a+(j.bill-j.partsCost-j.fee*0),0)+quickMonthProfit-monthExp;
 const stats=[["আজকের কাজ",todayJobs.length+todayQuick.length],["আজকের আদায়",money(todayJobs.reduce((a,j)=>a+j.paid,0)+quickTodayReceived)],["আজকের খরচ",money(todayExp)],["আজকের আনুমানিক লাভ",money(todayJobs.reduce((a,j)=>a+j.bill-j.partsCost,0)+quickTodayProfit-todayExp)],["মোট বাকি",money(data.jobs.reduce((a,j)=>a+Math.max(0,j.bill-j.paid),0))],["কাজ চলছে",data.jobs.filter(j=>j.status==="কাজ চলছে").length],["এই মাসের মোট বিল",money(bill)],["এই মাসের লাভ",money(profit)]];
 $("stats").innerHTML=stats.map((x,i)=>`<div class="stat ${[0,5].includes(i)?"clickable":""}" ${[0,5].includes(i)?`role="button" tabindex="0" onclick="showStatDetails(${i})"`:""}><small>${x[0]}</small><strong>${x[1]}</strong>${[0,5].includes(i)?'<small>বিস্তারিত দেখতে চাপ দিন</small>':''}</div>`).join("");
 $("recent").innerHTML=jobRows(data.jobs.slice(0,5));renderJobs();
@@ -263,11 +288,11 @@ window.toggleRecent=()=>{const el=$("recent"),b=$("recentToggle");el.classList.t
 window.adjustPart=id=>{const p=data.parts.find(x=>x.id===id);if(!p)return;const n=Number(prompt("নতুন স্টক পরিমাণ লিখুন",p.qty));if(Number.isFinite(n)&&n>=0){p.qty=n;save()}};
 window.receipt=id=>{const j=data.jobs.find(x=>x.id===id);if(!j)return;const w=window.open("","_blank");w.document.write(`<html><head><title>J.R Telecom Receipt</title><style>body{font-family:Arial;padding:25px}h2{color:#9a742d}table{width:100%;border-collapse:collapse}td{padding:9px;border-bottom:1px solid #ddd}</style></head><body><h2>J.R TELECOM</h2><p>MOBILE SERVICE • REPAIR • ACCESSORIES<br>Tista, Lalmonirhat · 01826339776</p><hr><h3>কাজের রসিদ</h3><table>${[["কাস্টমার",j.customer],["মোবাইল",j.phone],["ডিভাইস",j.device],["সমস্যা",j.problem],["তারিখ",j.date],["মোট বিল",money(j.bill)],["জমা",money(j.paid)],["বাকি",money(j.due)],["অবস্থা",j.status]].map(r=>`<tr><td>${r[0]}</td><td>${r[1]||""}</td></tr>`).join("")}</table><p>ধন্যবাদ, আবার আসবেন।</p><script>window.print()<\/script></body></html>`);w.document.close()};
 window.downloadBackup=()=>{const blob=new Blob([JSON.stringify({app:"J.R Telecom",version:1,exportedAt:new Date().toISOString(),data},null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="JR_Telecom_Backup_"+today()+".json";a.click();URL.revokeObjectURL(a.href)};
-window.restoreBackup=()=>{const f=$("restoreFile").files[0];if(!f)return alert("আগে JSON ব্যাকআপ ফাইল নির্বাচন করুন।");const r=new FileReader();r.onload=()=>{try{const x=JSON.parse(r.result),d=x.data||x;if(!Array.isArray(d.jobs)||!Array.isArray(d.expenses)||!Array.isArray(d.parts))throw Error("ভুল ব্যাকআপ ফাইল");if(!confirm("বর্তমান তথ্যের জায়গায় ব্যাকআপের তথ্য বসবে। চালাবেন?"))return;data={jobs:d.jobs,expenses:d.expenses,parts:d.parts,quickJobs:Array.isArray(d.quickJobs)?d.quickJobs:[],loans:Array.isArray(d.loans)?d.loans:[],shopNeeds:Array.isArray(d.shopNeeds)?d.shopNeeds:[]};save();alert("ব্যাকআপ ফিরিয়ে আনা হয়েছে।")}catch(e){alert("ব্যাকআপ ফাইলটি পড়া যায়নি।")}};r.readAsText(f)};
-window.clearAll=()=>{if(!confirm("সতর্কতা: সব হিসাব মুছে যাবে। নিশ্চিত?"))return;if(!confirm("শেষবার নিশ্চিত করুন—সব ডাটা মুছে ফেলবেন?"))return;data={jobs:[],expenses:[],parts:[],quickJobs:[],loans:[],shopNeeds:[]};save()};
+window.restoreBackup=()=>{const f=$("restoreFile").files[0];if(!f)return alert("আগে JSON ব্যাকআপ ফাইল নির্বাচন করুন।");const r=new FileReader();r.onload=()=>{try{const x=JSON.parse(r.result),d=x.data||x;if(!Array.isArray(d.jobs)||!Array.isArray(d.expenses)||!Array.isArray(d.parts))throw Error("ভুল ব্যাকআপ ফাইল");if(!confirm("বর্তমান তথ্যের জায়গায় ব্যাকআপের তথ্য বসবে। চালাবেন?"))return;data={jobs:d.jobs,expenses:d.expenses,parts:d.parts,quickJobs:Array.isArray(d.quickJobs)?d.quickJobs:[],loans:Array.isArray(d.loans)?d.loans:[],shopNeeds:Array.isArray(d.shopNeeds)?d.shopNeeds:[],partOrders:Array.isArray(d.partOrders)?d.partOrders:[]};save();alert("ব্যাকআপ ফিরিয়ে আনা হয়েছে।")}catch(e){alert("ব্যাকআপ ফাইলটি পড়া যায়নি।")}};r.readAsText(f)};
+window.clearAll=()=>{if(!confirm("সতর্কতা: সব হিসাব মুছে যাবে। নিশ্চিত?"))return;if(!confirm("শেষবার নিশ্চিত করুন—সব ডাটা মুছে ফেলবেন?"))return;data={jobs:[],expenses:[],parts:[],quickJobs:[],loans:[],shopNeeds:[],partOrders:[]};save()};
 window.exportCSV=()=>{const rows=[["Type","Customer","Phone","Device/Work","Problem","Date","Bill/Received","Paid","Profit","Due","Status"],...data.jobs.map(j=>["Regular Job",j.customer,j.phone,j.device,j.problem,j.date,j.bill,j.paid,j.bill-j.partsCost,j.due,j.status]),...(data.quickJobs||[]).map(x=>["Quick Job","","",x.work,"",x.date,x.received,x.received,x.profit,0,"Quick entry"])];const csv="\uFEFF"+rows.map(r=>r.map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(",")).join("\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download="JR_Telecom_Report.csv";a.click();URL.revokeObjectURL(a.href)};
-$("jobDate").value=today();$("expenseDate").value=today();$("quickDate").value=today();$("loanDate").value=today();renderAll();
+$("jobDate").value=today();$("expenseDate").value=today();$("quickDate").value=today();$("loanDate").value=today();$("partOrderDate").value=today();addPartOrderRow();renderAll();
 let lastDhakaDate=today();
-setInterval(()=>{const currentDhakaDate=today();if(currentDhakaDate!==lastDhakaDate){lastDhakaDate=currentDhakaDate;renderAll();}},30000);
+setInterval(()=>{const currentDhakaDate=today();if(currentDhakaDate!==lastDhakaDate){lastDhakaDate=currentDhakaDate;$("partOrderDate").value=today();renderAll();}},30000);
 </script>
 </body></html>
